@@ -40,29 +40,61 @@ class AdvancedRAGPipeline:
 
             prompt_template = PromptTemplate(
                 input_variables=["combined_results", "content"],
-                template="""  You are an expert Indian Tax Lawyer AI assistant specialized in interpreting judgments, tribunal orders, and statutory provisions under the Indian Income-tax Act.
+                template="""    You are an expert Indian Tax Lawyer AI assistant, specialized in interpreting judgments, tribunal orders, and statutory provisions under the Indian Income-tax Act.
 
-                            Your goal is to understand the user’s question deeply, then formulate a coherent, conversational, and evidence-based response using the retrieved data provided from multiple levels.
+                                Your goal is to understand the user’s question deeply, and then formulate a coherent, conversational, and evidence-based explanation using the retrieved legal data provided from multiple levels.
 
-                            {conversation_summary}
+                                ⚖️ Guidelines for the Response
 
+                                Interpretation & Intent:
 
-                            Your Objectives:
-                            - Interpret the user’s query like a human legal expert — infer what the user is truly asking (intent).
-                            - Cross-reference the provided data — reason about which parts best answer the query.
-                            - Respond conversationally, as if you’re explaining it to a legal researcher or law student.
-                            - Correlate the evidence explicitly — explain why each cited case or section supports the answer.
-                            - **When citing cases, refer to them naturally (e.g., “In [1959] 36 ITR 133 (Andhra Pradesh)…”), not using technical labels like ‘key’ or ‘source_file’.**
-                            - Never make up or assume data — rely strictly on the retrieved information.
-                            - End with a concise conclusion that logically answers the query.
+                                Understand what the user truly wants to know — whether it’s about a principle of law, factual inference, or judicial reasoning.
 
-                            In the end include the below 2 sections.
+                                Respond as if explaining it to a junior associate, legal researcher, or law student.
+
+                                Reasoning & Evidence:
+
+                                Cross-reference the retrieved cases, sections, and orders.
+
+                                Clearly explain why each case or statutory provision supports your answer.
+
+                                Use natural legal citation style — e.g.,
+
+                                “In [1959] 36 ITR 133 (Andhra Pradesh), the Court held that…”
+
+                                Tone & Style:
+
+                                Write in a conversational but professional tone.
+
+                                Break long explanations into clear, digestible paragraphs.
+
+                                Use bold, italics, and bullet points for readability.
+
+                                Where reasoning involves multiple parts, use stepwise or numbered formatting.
+
+                                Integrity:
+
+                                Never make up facts or citations.
+
+                                Use only the provided data in combined_results below and infer logically.
+
+                                🧾 Response Format
+
+                                Start your answer with a short, conversational opening that connects with the user’s query.
+                                Then follow with your detailed, evidence-backed explanation.
+
+                                At the end, always include the following three sections:(keep the below # heading as it is)
+
+                             ### Title:
+                            Generate a concise, professional Chat Title (6–10 words) summarizing the discussion.
 
                             ### Summary of the Answer:
                             Provide a brief summary of the question asked and answer you have given above in maximum 5 sentences .
 
-                            ### List of Referred PDFs:
-                            - [Case name(s) used in the answer](source_file_name)
+                            ### List of Referred PDFs: 
+                            Display only those PDFs that were retrieved from the vector database — not other general references.Modify the column heading as required.
+                            - [Case name(s) used in the answer](source_file_name) | Bench / Court | Short Summary or Description | Other Details (if any)
+                           
                             User Query:
                             {content}
 
@@ -78,6 +110,9 @@ class AdvancedRAGPipeline:
             response = llm.invoke(messages)
             answer = response.content
 
+            print('RAG + LLM answer')
+            print(answer)
+
             pdf_list = re.findall(r'-\s*(\[[0-9]{4}\].*?\(.*?\))', answer)
 
             print("Extracted PDFs:", pdf_list)
@@ -92,12 +127,24 @@ class AdvancedRAGPipeline:
             print("unique_pdfs")
             print(unique_pdfs)
 
+            title_pattern = r'### Title:\s*\n(.*?)\s*(?:### Summary of the Answer:|$)'
+            title_match = re.search(title_pattern, answer, re.DOTALL)
+            title_answer = title_match.group(1).strip() if title_match else ""
+
+
             summary_pattern = r'### Summary of the Answer:\s*\n(.*?)\s*(?:### List of Referred PDFs:|$)'
             summary_match = re.search(summary_pattern, answer, re.DOTALL)
             summary_answer = summary_match.group(1).strip() if summary_match else ""
 
             print("summary_answer")
             print(summary_answer)
+
+            # answer = re.sub(summary_pattern, '', answer, flags=re.DOTALL).strip()
+            answer = re.sub(r'### Title:.*?(?=### Summary of the Answer:|$)', '', answer, flags=re.DOTALL)
+            answer = re.sub(r'### Summary of the Answer:.*?(?:### List of Referred PDFs:|$)', '', answer, flags=re.DOTALL)
+
+            if summary:
+                title_answer = ""
 
             source_file_list = []
 
@@ -129,10 +176,8 @@ class AdvancedRAGPipeline:
                 'answer': answer,
                 'sources': source_file_list,
                 'summary': summary_answer,
+                'title' : title_answer
             }
         except Exception as e:
             print(f"Error in AdvancedRAGPipeline query: {e}")
     
-
-
-
